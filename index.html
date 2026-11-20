@@ -160,15 +160,28 @@ function editTile(arr,i){
 
 /* réglages */
 function settings(){const d=$("dlg");
- d.innerHTML='<div class="f"><h3>Réglages</h3><label class="ck"><input type="checkbox" id="sa"> Retour à l’accueil après une phrase</label><label class="ck"><input type="checkbox" id="ss"> Parler automatiquement en fin de phrase</label><label>Genre des accords<select id="sg"><option value="m">Garçon</option><option value="f">Fille</option></select></label><label>Vitesse de la voix<input type="range" id="sr" min="0.5" max="1.3" step="0.05"></label><div class="row"><button type="button" id="sp">Code d’accès…</button><button type="button" id="sx">Exporter la sauvegarde</button><label class="btn">Importer<input type="file" id="si" accept=".json,application/json" hidden></label><button type="button" id="sz">Réinitialiser</button></div><div class="row"><button type="button" class="ok" id="se">Quitter le mode édition</button><button type="button" id="sc">Fermer</button></div></div>';
+ d.innerHTML='<div class="f"><h3>Réglages</h3><label class="ck"><input type="checkbox" id="sa"> Retour à l’accueil après une phrase</label><label class="ck"><input type="checkbox" id="ss"> Parler automatiquement en fin de phrase</label><label>Genre des accords<select id="sg"><option value="m">Garçon</option><option value="f">Fille</option></select></label><label>Vitesse de la voix<input type="range" id="sr" min="0.5" max="1.3" step="0.05"></label><div class="row"><button type="button" id="su">Mettre à jour les pictogrammes</button><button type="button" id="sp">Code d’accès…</button><button type="button" id="sx">Exporter la sauvegarde</button><label class="btn">Importer<input type="file" id="si" accept=".json,application/json" hidden></label><button type="button" id="sz">Réinitialiser</button></div><div class="row"><button type="button" class="ok" id="se">Quitter le mode édition</button><button type="button" id="sc">Fermer</button></div></div>';
  $("sa").checked=db.set.auto;$("ss").checked=db.set.spk;$("sg").value=db.set.gen;$("sr").value=db.set.rate;
  const up=()=>{db.set.auto=$("sa").checked;db.set.spk=$("ss").checked;db.set.gen=$("sg").value;db.set.rate=+$("sr").value;save();draw()};
  ["sa","ss","sg","sr"].forEach(k=>$(k).onchange=up);
  $("sc").onclick=()=>d.close();$("se").onclick=()=>{edit=false;d.close();draw()};
- $("sx").onclick=exportAll;$("sp").onclick=()=>setPin();
+ $("sx").onclick=exportAll;$("sp").onclick=()=>setPin();$("su").onclick=updatePictos;
  $("si").onchange=e=>importAll(e.target.files[0]);
  $("sz").onclick=()=>{if(confirm("Remettre la grille d’origine ? Vos modifications seront perdues.")){db=clone(SEED);save();home();d.close();draw()}};
  d.showModal()}
+async function updatePictos(){
+ if(!navigator.onLine){toast("Connexion nécessaire");return}
+ try{
+  const r=await fetch("extra-picto.json?"+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;
+  const o=await r.json();if(!o.db||!o.db.pages||!o.images)throw 0;
+  const all=d=>[...Object.values(d.pages).flatMap(p=>p.c),...(d.pq||[])].filter(Boolean);
+  const map=new Map();all(o.db).forEach(t=>{if(t.i&&t.i.b&&!map.has(t.l))map.set(t.l,t.i.b)});
+  const tg=all(db).filter(t=>map.has(t.l)&&!(t.i&&t.i.b&&t.i.b[0]==="i"));
+  if(!confirm("Mettre à jour "+tg.length+" entrées avec les nouveaux pictogrammes ? Vos photos et vos entrées ajoutées sont conservées."))return;
+  for(const id of new Set(tg.map(t=>map.get(t.l)))){if(!imgs.has(id)&&o.images[id]){const b=await(await fetch(o.images[id])).blob();await st("img","readwrite",x=>x.put(b,id));imgs.set(id,URL.createObjectURL(b))}}
+  let n=0;tg.forEach(t=>{const id=map.get(t.l);if(imgs.has(id)){t.i={b:id};n++}});
+  save();draw();toast(n+" pictogrammes mis à jour")
+ }catch(e){toast("Mise à jour impossible (connexion ou fichier introuvable)")}}
 async function exportAll(){try{const images={};for(const[id,url]of imgs){const b=await(await fetch(url)).blob();images[id]=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})}
  const a=E("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({v:1,db,images})],{type:"application/json"}));a.download="pictalk-sauvegarde-"+new Date().toISOString().slice(0,10)+".json";a.click()}catch(e){toast("Export impossible")}}
 async function importAll(f){if(!f)return;try{const o=JSON.parse(await f.text());if(!o.db||!o.db.pages||!o.db.pages.home)throw 0;
